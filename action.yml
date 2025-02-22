@@ -1,0 +1,48 @@
+name: "Create and Publish Docker Image"
+description: "Builds and pushes a Docker image to a registry"
+author: "Falokut"
+inputs:
+  image_name:
+    description: "Name of the Docker image"
+    required: true
+  version_file:
+    description: "Path to file with version in it"
+    required: false
+    default: ".version"
+  registry_username:
+    description: "Docker registry username"
+    required: true
+  registry_password:
+    description: "Docker registry password"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3.9.0
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ inputs.registry_username }}
+        password: ${{ inputs.registry_password }}
+
+    - name: Get Git SHA
+      run: echo "GIT_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Read version from file
+      id: get_version
+      run: echo "VERSION=$(cat ${{ inputs.version_file }} | tr -d '\n')" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Build and push Docker image
+      run: |
+        docker build -t ${{ inputs.registry_username }}/${{ inputs.image_name }}:latest .
+        docker tag ${{ inputs.registry_username }}/${{ inputs.image_name }}:latest ${{ inputs.registry_username }}/${{ inputs.image_name }}:${{ env.VERSION }}
+        docker tag ${{ inputs.registry_username }}/${{ inputs.image_name }}:latest ${{ inputs.registry_username }}/${{ inputs.image_name }}:${{ env.GIT_SHA }}
+        docker push ${{ inputs.registry_username }}/${{ inputs.image_name }}:latest
+        docker push ${{ inputs.registry_username }}/${{ inputs.image_name }}:${{ env.VERSION }}
+        docker push ${{ inputs.registry_username }}/${{ inputs.image_name }}:${{ env.GIT_SHA }}
+      shell: bash
